@@ -37,13 +37,13 @@ The following attributes are available for `viam-labs:vision:yolov8` model:
 
 | Name | Type | Inclusion | Description |
 | ---- | ---- | --------- | ----------- |
-| `revision` | string | **Required** |  Moondream model revision, defaults to "2024-03-06" |
+| `revision` | string | **Required** |  Moondream model revision, defaults to "2024-08-26" |
 
 ### Example Configurations
 
 ```json
 {
-  "revision": "2024-03-06"
+  "revision": "2024-08-26"
 }
 ```
 

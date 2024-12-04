@@ -56,7 +56,7 @@ class moondream(Vision, Reconfigurable):
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
         self.DEPS = dependencies
         model_id = "vikhyatk/moondream2"
-        revision = config.attributes.fields["revision"].string_value or "2024-03-06"
+        revision = config.attributes.fields["revision"].string_value or "2024-08-26"
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id, trust_remote_code=True, revision=revision
         )
