@@ -1,4 +1,4 @@
-viam-sdk~=0.34.0
+viam-sdk~=0.63.0
 transformers
 timm
 einops
