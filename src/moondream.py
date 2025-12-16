@@ -69,8 +69,13 @@ class moondream(Vision, Reconfigurable):
     ) -> ViamImage:
         actual_cam = self.DEPS[Camera.get_resource_name(camera_name)]
         cam = cast(Camera, actual_cam)
-        cam_image = await cam.get_image(mime_type="image/jpeg")
-        return cam_image
+        images, _ = await cam.get_images()
+        if not images:
+            raise Exception("get_images from cam returned no images")
+        for img in images:
+            if img.mime_type == CameraMimeType.JPEG:
+                return img
+        raise Exception(f"no images from cam is {CameraMimeType.JPEG}")
     
     # not implemented, use classification methods
     async def get_detections_from_camera(
