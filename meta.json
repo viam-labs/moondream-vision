@@ -6,7 +6,9 @@
   "models": [
     {
       "api": "rdk:service:vision",
-      "model": "viam-labs:vision:moondream"
+      "model": "viam-labs:vision:moondream",
+      "markdown_link": "README.md#configure-your-vision-service",
+      "short_description": "Leverage the Moondream tiny vision language model for computer vision tasks"
     }
   ],
   "entrypoint": "run.sh"
