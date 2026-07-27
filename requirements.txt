@@ -1,3 +1,5 @@
 viam-sdk~=0.79.0
 moondream
 pillow
+# Photon (kestrel-mps-torch-ext) currently supports torch minors 2.9–2.12 only
+torch>=2.9,<2.13

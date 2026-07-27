@@ -6,6 +6,8 @@ This model leverages [Moondream](https://docs.moondream.ai/) via the Photon infe
 
 Local Photon inference requires an NVIDIA GPU (Ampere or newer) or an Apple Silicon Mac. See [Run Moondream Locally](https://docs.moondream.ai/running-locally) for hardware details.
 
+On Apple Silicon, Photon needs a PyTorch minor that matches `kestrel-mps-torch-ext` (currently 2.9–2.12). This module pins `torch>=2.9,<2.13` for that reason. If you hit a torch/MPS ABI mismatch, set `"local": false` to use Moondream Cloud, or recreate the module venv after upgrading so the pin is applied.
+
 ## Build and Run
 
 To use this module, follow these instructions to [add a module from the Viam Registry](https://docs.viam.com/registry/configure/#add-a-modular-resource-from-the-viam-registry) and select the `viam-labs:vision:moondream` model from the [viam-labs moondream-vision module](https://app.viam.com/module/viam-labs/moondream-vision).
