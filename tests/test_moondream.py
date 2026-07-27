@@ -136,6 +136,26 @@ class TestClassifications:
         assert result[0]["class_name"] == "from cam"
         service._test_camera.get_images.assert_awaited()
 
+    @pytest.mark.asyncio
+    async def test_from_camera_uses_requested_camera(self, mock_vl):
+        _, model = mock_vl
+        model.query.return_value = {"answer": "from cam-b"}
+        cam_a = make_camera()
+        cam_b = make_camera()
+        deps = {
+            Camera.get_resource_name("cam-a"): cam_a,
+            Camera.get_resource_name("cam-b"): cam_b,
+        }
+        service = Moondream.new(
+            make_config({"api_key": "test-key", "camera": "cam-a"}),
+            deps,
+        )
+
+        await service.get_classifications_from_camera("cam-b", 1)
+
+        cam_b.get_images.assert_awaited()
+        cam_a.get_images.assert_not_awaited()
+
 
 class TestDetections:
     @pytest.mark.asyncio
@@ -194,6 +214,28 @@ class TestDetections:
         assert len(result) == 1
         service._test_camera.get_images.assert_awaited()
 
+    @pytest.mark.asyncio
+    async def test_from_camera_uses_requested_camera(self, mock_vl):
+        _, model = mock_vl
+        model.query.return_value = {"answer": "cup"}
+        model.detect.return_value = {
+            "objects": [{"x_min": 0, "y_min": 0, "x_max": 0.5, "y_max": 0.5}]
+        }
+        cam_a = make_camera()
+        cam_b = make_camera()
+        service = Moondream.new(
+            make_config({"api_key": "test-key", "camera": "cam-a"}),
+            {
+                Camera.get_resource_name("cam-a"): cam_a,
+                Camera.get_resource_name("cam-b"): cam_b,
+            },
+        )
+
+        await service.get_detections_from_camera("cam-b")
+
+        cam_b.get_images.assert_awaited()
+        cam_a.get_images.assert_not_awaited()
+
 
 class TestPropertiesAndCaptureAll:
     @pytest.mark.asyncio
@@ -231,3 +273,21 @@ class TestPropertiesAndCaptureAll:
         assert not result.classifications
         assert not result.detections
         service._test_model.query.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_capture_all_uses_requested_camera(self, mock_vl):
+        _, model = mock_vl
+        cam_a = make_camera()
+        cam_b = make_camera()
+        service = Moondream.new(
+            make_config({"api_key": "test-key", "camera": "cam-a"}),
+            {
+                Camera.get_resource_name("cam-a"): cam_a,
+                Camera.get_resource_name("cam-b"): cam_b,
+            },
+        )
+
+        await service.capture_all_from_camera("cam-b")
+
+        cam_b.get_images.assert_awaited()
+        cam_a.get_images.assert_not_awaited()

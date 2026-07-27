@@ -33,7 +33,7 @@ class moondream(Vision, Reconfigurable):
     MODEL: ClassVar[Model] = Model(ModelFamily("viam-labs", "vision"), "moondream")
     
     model: Any
-    camera: Camera
+    DEPS: Mapping[ResourceName, ResourceBase]
 
     # Constructor
     @classmethod
@@ -56,14 +56,17 @@ class moondream(Vision, Reconfigurable):
 
     # Handles attribute reconfiguration
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
+        self.DEPS = dependencies
         fields = config.attributes.fields
 
         api_key = fields["api_key"].string_value or os.environ.get("MOONDREAM_API_KEY", "")
         if not api_key:
             raise Exception("api_key is required (set attributes.api_key or MOONDREAM_API_KEY)")
 
+        # Ensure the configured camera dependency is present
         camera_name = fields["camera"].string_value
-        self.camera = cast(Camera, dependencies[Camera.get_resource_name(camera_name)])
+        if Camera.get_resource_name(camera_name) not in dependencies:
+            raise Exception(f"camera dependency '{camera_name}' not found")
 
         # Default to local Photon inference; set local=false for Moondream Cloud
         local = True
@@ -80,8 +83,9 @@ class moondream(Vision, Reconfigurable):
         self.model = md.vl(**kwargs)
         return
     
-    async def get_cam_image(self) -> ViamImage:
-        images, _ = await self.camera.get_images()
+    async def get_cam_image(self, camera_name: str) -> ViamImage:
+        cam = cast(Camera, self.DEPS[Camera.get_resource_name(camera_name)])
+        images, _ = await cam.get_images()
         if not images:
             raise Exception("get_images from cam returned no images")
         for img in images:
@@ -132,7 +136,7 @@ class moondream(Vision, Reconfigurable):
     async def get_detections_from_camera(
         self, camera_name: str, *, extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None
     ) -> List[Detection]:
-        return await self.get_detections(await self.get_cam_image(), extra=extra)
+        return await self.get_detections(await self.get_cam_image(camera_name), extra=extra)
 
     async def get_detections(
         self,
@@ -157,7 +161,7 @@ class moondream(Vision, Reconfigurable):
         extra: Optional[Mapping[str, Any]] = None,
         timeout: Optional[float] = None,
     ) -> List[Classification]:
-        return await self.get_classifications(await self.get_cam_image(), count, extra=extra)
+        return await self.get_classifications(await self.get_cam_image(camera_name), count, extra=extra)
 
     
     async def get_classifications(
@@ -197,7 +201,7 @@ class moondream(Vision, Reconfigurable):
         timeout: Optional[float] = None,
     ) -> CaptureAllResult:
         result = CaptureAllResult()
-        result.image = await self.get_cam_image()
+        result.image = await self.get_cam_image(camera_name)
         if return_classifications:
             result.classifications = await self.get_classifications(result.image, 1, extra=extra)
         if return_detections:

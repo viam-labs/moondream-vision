@@ -40,7 +40,7 @@ The following attributes are available for `viam-labs:vision:moondream` model:
 | Name | Type | Inclusion | Description |
 | ---- | ---- | --------- | ----------- |
 | `api_key` | string | **Required** | Moondream API key from [moondream.ai](https://moondream.ai/c/cloud/api-keys). Can also be supplied via the `MOONDREAM_API_KEY` environment variable. |
-| `camera` | string | **Required** | Name of the camera component to depend on for `*_from_camera` methods. |
+| `camera` | string | **Required** | Default camera dependency for the service. Camera-based API methods use the `camera_name` argument; add extra cameras via `depends_on` if needed. |
 | `local` | bool | Optional | Run with Photon locally (`true`, default) or Moondream Cloud (`false`). |
 | `model` | string | Optional | Model to use. Defaults to Moondream 3 Preview. Use `"moondream2"` for Moondream 2. |
 
@@ -80,7 +80,7 @@ Local with Moondream 2:
 
 The moondream resource provides the following methods from Viam's built-in [rdk:service:vision API](https://python.viam.dev/autoapi/viam/services/vision/client/index.html)
 
-Camera-based methods use the camera configured in the `camera` attribute.
+Camera-based methods use the `camera_name` argument. That camera must be available as a dependency (the required `camera` attribute, and any additional cameras listed in `depends_on`).
 
 ### get_classifications(image=*binary*, count)
 
