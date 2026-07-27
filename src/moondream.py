@@ -1,15 +1,10 @@
-from typing import ClassVar, Mapping, Sequence, Any, Dict, Optional, Tuple, Final, List, cast
+from typing import ClassVar, Mapping, Optional, Any, List, cast
 from typing_extensions import Self
-
-from typing import Any, Final, List, Mapping, Optional, Union
-
-from PIL import Image
+import os
 
 from viam.proto.common import PointCloudObject
 from viam.proto.service.vision import Classification, Detection
-from viam.resource.types import RESOURCE_NAMESPACE_RDK, RESOURCE_TYPE_SERVICE, Subtype
 from viam.utils import ValueTypes
-
 
 from viam.module.types import Reconfigurable
 from viam.proto.app.robot import ComponentConfig
@@ -21,10 +16,10 @@ from viam.services.vision import Vision, CaptureAllResult
 from viam.proto.service.vision import GetPropertiesResponse
 from viam.components.camera import Camera, ViamImage
 from viam.media.utils.pil import viam_to_pil_image
+from viam.media.video import CameraMimeType
 from viam.logging import getLogger
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from PIL import Image
+import moondream as md
 
 LOGGER = getLogger(__name__)
 
@@ -37,8 +32,8 @@ class moondream(Vision, Reconfigurable):
 
     MODEL: ClassVar[Model] = Model(ModelFamily("viam-labs", "vision"), "moondream")
     
-    model: AutoModelForCausalLM
-    tokenizer = AutoTokenizer
+    model: Any
+    camera: Camera
 
     # Constructor
     @classmethod
@@ -50,40 +45,95 @@ class moondream(Vision, Reconfigurable):
     # Validates JSON Configuration
     @classmethod
     def validate(cls, config: ComponentConfig):
-        return
+        fields = config.attributes.fields
+        api_key = fields["api_key"].string_value or os.environ.get("MOONDREAM_API_KEY", "")
+        if not api_key:
+            raise Exception("api_key is required (set attributes.api_key or MOONDREAM_API_KEY)")
+        camera = fields["camera"].string_value
+        if not camera:
+            raise Exception("camera is required")
+        return [camera], []
 
     # Handles attribute reconfiguration
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
-        self.DEPS = dependencies
-        model_id = "vikhyatk/moondream2"
-        revision = config.attributes.fields["revision"].string_value or "2024-08-26"
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_id, trust_remote_code=True, revision=revision
-        )
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+        fields = config.attributes.fields
+
+        api_key = fields["api_key"].string_value or os.environ.get("MOONDREAM_API_KEY", "")
+        if not api_key:
+            raise Exception("api_key is required (set attributes.api_key or MOONDREAM_API_KEY)")
+
+        camera_name = fields["camera"].string_value
+        self.camera = cast(Camera, dependencies[Camera.get_resource_name(camera_name)])
+
+        # Default to local Photon inference; set local=false for Moondream Cloud
+        local = True
+        if "local" in fields:
+            local = fields["local"].bool_value
+
+        kwargs = {"api_key": api_key, "local": local}
+        model_name = fields["model"].string_value
+        if model_name:
+            kwargs["model"] = model_name
+
+        mode = "local (Photon)" if local else "cloud"
+        LOGGER.info(f"initializing Moondream in {mode} mode")
+        self.model = md.vl(**kwargs)
         return
     
-    async def get_cam_image(
-        self,
-        camera_name: str
-    ) -> ViamImage:
-        actual_cam = self.DEPS[Camera.get_resource_name(camera_name)]
-        cam = cast(Camera, actual_cam)
-        images, _ = await cam.get_images()
+    async def get_cam_image(self) -> ViamImage:
+        images, _ = await self.camera.get_images()
         if not images:
             raise Exception("get_images from cam returned no images")
         for img in images:
             if img.mime_type == CameraMimeType.JPEG:
                 return img
         raise Exception(f"no images from cam is {CameraMimeType.JPEG}")
+
+    def _list_objects(self, pil_image, query: Optional[str] = None) -> List[str]:
+        """Query Moondream for a comma-separated list of objects to detect."""
+        if query and str(query).strip():
+            prompt = (
+                f"List all {str(query).strip()} you can see in this image. "
+                "Return your answer as a simple comma-separated list of object names."
+            )
+        else:
+            prompt = (
+                "List all the objects you can see in this image. "
+                "Return your answer as a simple comma-separated list of object names."
+            )
+        answer = self.model.query(pil_image, prompt, reasoning=True)["answer"] or ""
+        return [obj.strip() for obj in answer.split(",") if obj.strip()]
+
+    def _detect_objects(self, pil_image, object_names: List[str]) -> List[Detection]:
+        """Run detect for each object name and convert to Viam detections."""
+        width, height = pil_image.size
+        detections = []
+        for object_name in object_names:
+            result = self.model.detect(pil_image, object_name)
+            for obj in result.get("objects") or []:
+                x_min_n = float(obj["x_min"])
+                y_min_n = float(obj["y_min"])
+                x_max_n = float(obj["x_max"])
+                y_max_n = float(obj["y_max"])
+                detections.append({
+                    "x_min": int(x_min_n * width),
+                    "y_min": int(y_min_n * height),
+                    "x_max": int(x_max_n * width),
+                    "y_max": int(y_max_n * height),
+                    "x_min_normalized": x_min_n,
+                    "y_min_normalized": y_min_n,
+                    "x_max_normalized": x_max_n,
+                    "y_max_normalized": y_max_n,
+                    "confidence": 1,
+                    "class_name": object_name,
+                })
+        return detections
     
-    # not implemented, use classification methods
     async def get_detections_from_camera(
         self, camera_name: str, *, extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None
     ) -> List[Detection]:
-        return
+        return await self.get_detections(await self.get_cam_image(), extra=extra)
 
-     # not implemented, use classification methods
     async def get_detections(
         self,
         image: ViamImage,
@@ -91,7 +141,13 @@ class moondream(Vision, Reconfigurable):
         extra: Optional[Mapping[str, Any]] = None,
         timeout: Optional[float] = None,
     ) -> List[Detection]:
-        return 
+        # Auto-label: query for object names, then detect each.
+        # Pass extra={"query": "..."} to limit which objects are listed.
+        # See https://docs.moondream.ai/sample-projects/automatic-detection-labeling
+        pil_image = viam_to_pil_image(image)
+        query = extra.get("query") if extra else None
+        object_names = self._list_objects(pil_image, query)
+        return self._detect_objects(pil_image, object_names)
     
     async def get_classifications_from_camera(
         self,
@@ -101,7 +157,7 @@ class moondream(Vision, Reconfigurable):
         extra: Optional[Mapping[str, Any]] = None,
         timeout: Optional[float] = None,
     ) -> List[Classification]:
-        return await self.get_classifications(await self.get_cam_image(camera_name), count, extra=extra)
+        return await self.get_classifications(await self.get_cam_image(), count, extra=extra)
 
     
     async def get_classifications(
@@ -116,8 +172,7 @@ class moondream(Vision, Reconfigurable):
         question = "describe this image"
         if extra != None and extra.get('question') != None:
             question = extra['question']
-        enc_image = self.model.encode_image(viam_to_pil_image(image))
-        result = self.model.answer_question(enc_image, question, self.tokenizer)
+        result = self.model.query(viam_to_pil_image(image), question)["answer"]
         classifications.append({"class_name": result, "confidence": 1})
         return classifications
 
@@ -142,8 +197,11 @@ class moondream(Vision, Reconfigurable):
         timeout: Optional[float] = None,
     ) -> CaptureAllResult:
         result = CaptureAllResult()
-        result.image = await self.get_cam_image(camera_name)
-        result.classifications = await self.get_classifications(result.image, 1)
+        result.image = await self.get_cam_image()
+        if return_classifications:
+            result.classifications = await self.get_classifications(result.image, 1, extra=extra)
+        if return_detections:
+            result.detections = await self.get_detections(result.image, extra=extra)
         return result
 
     async def get_properties(
@@ -154,6 +212,6 @@ class moondream(Vision, Reconfigurable):
     ) -> GetPropertiesResponse:
         return GetPropertiesResponse(
             classifications_supported=True,
-            detections_supported=False,
+            detections_supported=True,
             object_point_clouds_supported=False
             )

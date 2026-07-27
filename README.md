@@ -2,9 +2,9 @@
 
 This module implements the [rdk vision API](https://github.com/rdk/vision-api) in a viam-labs:vision:moondream model.
 
-This model leverages the [Moondream tiny vision language model](https://github.com/vikhyat/moondream) to allow for image classification and querying.
+This model leverages [Moondream](https://docs.moondream.ai/) via the Photon inference engine to allow for image classification and querying. By default it runs locally with Photon; set `local` to `false` to use [Moondream Cloud](https://docs.moondream.ai/quickstart) instead. An API key from [moondream.ai](https://moondream.ai/c/cloud/api-keys) is required in either mode.
 
-The Moondream model and inference will run locally, and therefore speed of inference is highly dependant on hardware.
+Local Photon inference requires an NVIDIA GPU (Ampere or newer) or an Apple Silicon Mac. See [Run Moondream Locally](https://docs.moondream.ai/running-locally) for hardware details.
 
 ## Build and Run
 
@@ -24,7 +24,9 @@ On the new service panel, copy and paste the following attribute template into y
 
 ```json
 {
-  "revision": "<optional model revision>"
+  "api_key": "<your Moondream API key>",
+  "camera": "<camera-name>",
+  "local": true
 }
 ```
 
@@ -33,17 +35,44 @@ On the new service panel, copy and paste the following attribute template into y
 
 ### Attributes
 
-The following attributes are available for `viam-labs:vision:yolov8` model:
+The following attributes are available for `viam-labs:vision:moondream` model:
 
 | Name | Type | Inclusion | Description |
 | ---- | ---- | --------- | ----------- |
-| `revision` | string | **Required** |  Moondream model revision, defaults to "2024-08-26" |
+| `api_key` | string | **Required** | Moondream API key from [moondream.ai](https://moondream.ai/c/cloud/api-keys). Can also be supplied via the `MOONDREAM_API_KEY` environment variable. |
+| `camera` | string | **Required** | Name of the camera component to depend on for `*_from_camera` methods. |
+| `local` | bool | Optional | Run with Photon locally (`true`, default) or Moondream Cloud (`false`). |
+| `model` | string | Optional | Model to use. Defaults to Moondream 3 Preview. Use `"moondream2"` for Moondream 2. |
 
 ### Example Configurations
 
+Local Photon inference (default):
+
 ```json
 {
-  "revision": "2024-08-26"
+  "api_key": "YOUR_API_KEY",
+  "camera": "cam"
+}
+```
+
+Moondream Cloud:
+
+```json
+{
+  "api_key": "YOUR_API_KEY",
+  "camera": "cam",
+  "local": false
+}
+```
+
+Local with Moondream 2:
+
+```json
+{
+  "api_key": "YOUR_API_KEY",
+  "camera": "cam",
+  "local": true,
+  "model": "moondream2"
 }
 ```
 
@@ -51,17 +80,11 @@ The following attributes are available for `viam-labs:vision:yolov8` model:
 
 The moondream resource provides the following methods from Viam's built-in [rdk:service:vision API](https://python.viam.dev/autoapi/viam/services/vision/client/index.html)
 
+Camera-based methods use the camera configured in the `camera` attribute.
+
 ### get_classifications(image=*binary*, count)
 
 ### get_classifications_from_camera(camera_name=*string*, count)
-
-Note: if using this method, any cameras you are using must be set in the `depends_on` array for the service configuration, for example:
-
-```json
-      "depends_on": [
-        "cam"
-      ]
-```
 
 By default, the Moondream model will be asked the question "describe this image".
 If you want to ask a different question about the image, you can pass that question as the extra parameter "question".
@@ -69,4 +92,16 @@ For example:
 
 ``` python
 moondream.get_classifications(image, 1, extra={"question": "what is the person wearing?"})
+```
+
+### get_detections(image=*binary*)
+
+### get_detections_from_camera(camera_name=*string*)
+
+Detections use Moondream's [automatic detection labeling](https://docs.moondream.ai/sample-projects/automatic-detection-labeling) flow: query the image for a comma-separated list of object names, then run detect on each name to get bounding boxes.
+
+By default, all visible objects are listed and detected. Pass `extra={"query": "..."}` to limit the list (for example, only people or vehicles):
+
+``` python
+moondream.get_detections(image, extra={"query": "people"})
 ```
