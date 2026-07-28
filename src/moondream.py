@@ -37,6 +37,7 @@ class moondream(Vision, Reconfigurable):
     model: Any
     DEPS: Mapping[ResourceName, ResourceBase]
     classification_prompt: str
+    reasoning: bool
 
     # Constructor
     @classmethod
@@ -75,6 +76,11 @@ class moondream(Vision, Reconfigurable):
             fields["classification_prompt"].string_value or DEFAULT_CLASSIFICATION_PROMPT
         )
 
+        # Default false; set reasoning=true for higher-quality answers (more latency)
+        self.reasoning = False
+        if "reasoning" in fields:
+            self.reasoning = fields["reasoning"].bool_value
+
         # Default to local Photon inference; set local=false for Moondream Cloud
         local = True
         if "local" in fields:
@@ -100,7 +106,18 @@ class moondream(Vision, Reconfigurable):
                 return img
         raise Exception(f"no images from cam is {CameraMimeType.JPEG}")
 
-    def _list_objects(self, pil_image, query: Optional[str] = None) -> List[str]:
+    def _resolve_reasoning(self, extra: Optional[Mapping[str, Any]] = None) -> bool:
+        if extra is not None and "reasoning" in extra:
+            return bool(extra["reasoning"])
+        return self.reasoning
+
+    def _list_objects(
+        self,
+        pil_image,
+        query: Optional[str] = None,
+        *,
+        reasoning: bool = False,
+    ) -> List[str]:
         """Query Moondream for a comma-separated list of objects to detect."""
         if query and str(query).strip():
             prompt = (
@@ -112,7 +129,7 @@ class moondream(Vision, Reconfigurable):
                 "List all the objects you can see in this image. "
                 "Return your answer as a simple comma-separated list of object names."
             )
-        answer = self.model.query(pil_image, prompt, reasoning=True)["answer"] or ""
+        answer = self.model.query(pil_image, prompt, reasoning=reasoning)["answer"] or ""
         return [obj.strip() for obj in answer.split(",") if obj.strip()]
 
     def _detect_objects(self, pil_image, object_names: List[str]) -> List[Detection]:
@@ -157,7 +174,9 @@ class moondream(Vision, Reconfigurable):
         # See https://docs.moondream.ai/sample-projects/automatic-detection-labeling
         pil_image = viam_to_pil_image(image)
         query = extra.get("query") if extra else None
-        object_names = self._list_objects(pil_image, query)
+        object_names = self._list_objects(
+            pil_image, query, reasoning=self._resolve_reasoning(extra)
+        )
         return self._detect_objects(pil_image, object_names)
     
     async def get_classifications_from_camera(
@@ -183,7 +202,11 @@ class moondream(Vision, Reconfigurable):
         question = self.classification_prompt
         if extra is not None and extra.get("question") is not None:
             question = extra["question"]
-        result = self.model.query(viam_to_pil_image(image), question)["answer"]
+        result = self.model.query(
+            viam_to_pil_image(image),
+            question,
+            reasoning=self._resolve_reasoning(extra),
+        )["answer"]
         classifications.append({"class_name": result, "confidence": 1})
         return classifications
 

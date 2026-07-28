@@ -46,6 +46,7 @@ The following attributes are available for `viam-labs:vision:moondream` model:
 | `local` | bool | Optional | Run with Photon locally (`true`, default) or Moondream Cloud (`false`). |
 | `model` | string | Optional | Model to use. Defaults to Moondream 3 Preview. Use `"moondream2"` for Moondream 2. |
 | `classification_prompt` | string | Optional | Default question for classifications. Defaults to `"describe this image"`. Overridden by `extra.question` when provided. |
+| `reasoning` | bool | Optional | Enable Moondream [reasoning](https://docs.moondream.ai/reasoning) for higher-quality answers (`false` by default; adds latency). Overridden by `extra.reasoning` when provided. |
 
 ### Example Configurations
 
@@ -90,10 +91,14 @@ Camera-based methods use the `camera_name` argument. That camera must be availab
 ### get_classifications_from_camera(camera_name=*string*, count)
 
 By default, the Moondream model is asked the configured `classification_prompt` (or `"describe this image"` if unset).
-Override per call with the extra parameter `question`:
+Override per call with the extra parameter `question`. Enable [reasoning](https://docs.moondream.ai/reasoning) via config `reasoning` or `extra.reasoning`:
 
 ``` python
-moondream.get_classifications(image, 1, extra={"question": "what is the person wearing?"})
+moondream.get_classifications(
+    image,
+    1,
+    extra={"question": "what is the person wearing?", "reasoning": True},
+)
 ```
 
 ### get_detections(image=*binary*)

@@ -119,6 +119,7 @@ class TestClassifications:
         assert result == [{"class_name": "a red square", "confidence": 1}]
         args, kwargs = service._test_model.query.call_args
         assert args[1] == "describe this image"
+        assert kwargs.get("reasoning") is False
 
     @pytest.mark.asyncio
     async def test_config_classification_prompt(self, mock_vl):
@@ -162,6 +163,48 @@ class TestClassifications:
 
         assert result[0]["class_name"] == "yes"
         assert model.query.call_args[0][1] == "is there a person?"
+
+    @pytest.mark.asyncio
+    async def test_config_reasoning(self, mock_vl):
+        _, model = mock_vl
+        model.query.return_value = {"answer": "detailed"}
+        cam = make_camera()
+        service = Moondream.new(
+            make_config(
+                {
+                    "api_key": "test-key",
+                    "camera": "cam",
+                    "reasoning": True,
+                }
+            ),
+            {Camera.get_resource_name("cam"): cam},
+        )
+
+        await service.get_classifications(make_jpeg_image(), 1)
+
+        assert model.query.call_args.kwargs.get("reasoning") is True
+
+    @pytest.mark.asyncio
+    async def test_extra_reasoning_overrides_config(self, mock_vl):
+        _, model = mock_vl
+        model.query.return_value = {"answer": "quick"}
+        cam = make_camera()
+        service = Moondream.new(
+            make_config(
+                {
+                    "api_key": "test-key",
+                    "camera": "cam",
+                    "reasoning": True,
+                }
+            ),
+            {Camera.get_resource_name("cam"): cam},
+        )
+
+        await service.get_classifications(
+            make_jpeg_image(), 1, extra={"reasoning": False}
+        )
+
+        assert model.query.call_args.kwargs.get("reasoning") is False
 
     @pytest.mark.asyncio
     async def test_custom_question(self, service):
@@ -213,7 +256,7 @@ class TestDetections:
 
         prompt = service._test_model.query.call_args[0][1]
         assert "List all the objects you can see" in prompt
-        assert service._test_model.query.call_args.kwargs.get("reasoning") is True
+        assert service._test_model.query.call_args.kwargs.get("reasoning") is False
         assert service._test_model.detect.call_count == 2
         assert [d["class_name"] for d in result] == ["person", "chair"]
         assert result[0]["x_min"] == 10
@@ -239,6 +282,17 @@ class TestDetections:
         assert "List all people you can see" in prompt
         service._test_model.detect.assert_called_once()
         assert result[0]["class_name"] == "person"
+
+    @pytest.mark.asyncio
+    async def test_detection_query_respects_reasoning_extra(self, service):
+        service._test_model.query.return_value = {"answer": "person"}
+        service._test_model.detect.return_value = {
+            "objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]
+        }
+
+        await service.get_detections(make_jpeg_image(), extra={"reasoning": True})
+
+        assert service._test_model.query.call_args.kwargs.get("reasoning") is True
 
     @pytest.mark.asyncio
     async def test_empty_object_list(self, service):
