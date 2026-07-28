@@ -121,6 +121,49 @@ class TestClassifications:
         assert args[1] == "describe this image"
 
     @pytest.mark.asyncio
+    async def test_config_classification_prompt(self, mock_vl):
+        _, model = mock_vl
+        model.query.return_value = {"answer": "a helmet"}
+        cam = make_camera()
+        service = Moondream.new(
+            make_config(
+                {
+                    "api_key": "test-key",
+                    "camera": "cam",
+                    "classification_prompt": "what safety gear is visible?",
+                }
+            ),
+            {Camera.get_resource_name("cam"): cam},
+        )
+
+        await service.get_classifications(make_jpeg_image(), 1)
+
+        assert model.query.call_args[0][1] == "what safety gear is visible?"
+
+    @pytest.mark.asyncio
+    async def test_extra_question_overrides_config_prompt(self, mock_vl):
+        _, model = mock_vl
+        model.query.return_value = {"answer": "yes"}
+        cam = make_camera()
+        service = Moondream.new(
+            make_config(
+                {
+                    "api_key": "test-key",
+                    "camera": "cam",
+                    "classification_prompt": "what safety gear is visible?",
+                }
+            ),
+            {Camera.get_resource_name("cam"): cam},
+        )
+
+        result = await service.get_classifications(
+            make_jpeg_image(), 1, extra={"question": "is there a person?"}
+        )
+
+        assert result[0]["class_name"] == "yes"
+        assert model.query.call_args[0][1] == "is there a person?"
+
+    @pytest.mark.asyncio
     async def test_custom_question(self, service):
         service._test_model.query.return_value = {"answer": "yes"}
         result = await service.get_classifications(

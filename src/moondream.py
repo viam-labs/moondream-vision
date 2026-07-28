@@ -23,6 +23,8 @@ import moondream as md
 
 LOGGER = getLogger(__name__)
 
+DEFAULT_CLASSIFICATION_PROMPT = "describe this image"
+
 class moondream(Vision, Reconfigurable):
     
     """
@@ -34,6 +36,7 @@ class moondream(Vision, Reconfigurable):
     
     model: Any
     DEPS: Mapping[ResourceName, ResourceBase]
+    classification_prompt: str
 
     # Constructor
     @classmethod
@@ -67,6 +70,10 @@ class moondream(Vision, Reconfigurable):
         camera_name = fields["camera"].string_value
         if Camera.get_resource_name(camera_name) not in dependencies:
             raise Exception(f"camera dependency '{camera_name}' not found")
+
+        self.classification_prompt = (
+            fields["classification_prompt"].string_value or DEFAULT_CLASSIFICATION_PROMPT
+        )
 
         # Default to local Photon inference; set local=false for Moondream Cloud
         local = True
@@ -173,9 +180,9 @@ class moondream(Vision, Reconfigurable):
         timeout: Optional[float] = None,
     ) -> List[Classification]:
         classifications = []
-        question = "describe this image"
-        if extra != None and extra.get('question') != None:
-            question = extra['question']
+        question = self.classification_prompt
+        if extra is not None and extra.get("question") is not None:
+            question = extra["question"]
         result = self.model.query(viam_to_pil_image(image), question)["answer"]
         classifications.append({"class_name": result, "confidence": 1})
         return classifications

@@ -45,6 +45,7 @@ The following attributes are available for `viam-labs:vision:moondream` model:
 | `camera` | string | **Required** | Default camera dependency for the service. Camera-based API methods use the `camera_name` argument; add extra cameras via `depends_on` if needed. |
 | `local` | bool | Optional | Run with Photon locally (`true`, default) or Moondream Cloud (`false`). |
 | `model` | string | Optional | Model to use. Defaults to Moondream 3 Preview. Use `"moondream2"` for Moondream 2. |
+| `classification_prompt` | string | Optional | Default question for classifications. Defaults to `"describe this image"`. Overridden by `extra.question` when provided. |
 
 ### Example Configurations
 
@@ -88,9 +89,8 @@ Camera-based methods use the `camera_name` argument. That camera must be availab
 
 ### get_classifications_from_camera(camera_name=*string*, count)
 
-By default, the Moondream model will be asked the question "describe this image".
-If you want to ask a different question about the image, you can pass that question as the extra parameter "question".
-For example:
+By default, the Moondream model is asked the configured `classification_prompt` (or `"describe this image"` if unset).
+Override per call with the extra parameter `question`:
 
 ``` python
 moondream.get_classifications(image, 1, extra={"question": "what is the person wearing?"})
