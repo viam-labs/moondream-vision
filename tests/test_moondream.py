@@ -374,9 +374,24 @@ class TestPropertiesAndCaptureAll:
         assert result.image is not None
         assert result.classifications[0]["class_name"] == "person, chair"
         assert [d["class_name"] for d in result.detections] == ["person", "chair"]
-        # One classification query; detection reuses that text instead of querying again
+        # Shared object-listing query (not classification_prompt) for both results
         assert service._test_model.query.call_count == 1
+        prompt = service._test_model.query.call_args[0][1]
+        assert "List all the objects you can see" in prompt
         assert service._test_model.detect.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_capture_all_classifications_only_uses_classification_prompt(self, service):
+        service._test_model.query.return_value = {"answer": "a red helmet on a table"}
+
+        result = await service.capture_all_from_camera(
+            "cam",
+            return_classifications=True,
+        )
+
+        assert result.classifications[0]["class_name"] == "a red helmet on a table"
+        assert service._test_model.query.call_args[0][1] == "describe this image"
+        service._test_model.detect.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_capture_all_detections_only_still_lists_objects(self, service):
