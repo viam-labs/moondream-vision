@@ -162,6 +162,9 @@ class moondream(Vision, Reconfigurable):
     ) -> List[Detection]:
         return await self.get_detections(await self.get_cam_image(camera_name), extra=extra)
 
+    def _object_names_from_text(self, text: str) -> List[str]:
+        return [obj.strip() for obj in str(text).split(",") if obj.strip()]
+
     async def get_detections(
         self,
         image: ViamImage,
@@ -171,12 +174,21 @@ class moondream(Vision, Reconfigurable):
     ) -> List[Detection]:
         # Auto-label: query for object names, then detect each.
         # Pass extra={"query": "..."} to limit which objects are listed.
+        # Pass extra={"objects": "a, b"} or a list to skip the listing query.
         # See https://docs.moondream.ai/sample-projects/automatic-detection-labeling
         pil_image = viam_to_pil_image(image)
-        query = extra.get("query") if extra else None
-        object_names = self._list_objects(
-            pil_image, query, reasoning=self._resolve_reasoning(extra)
-        )
+        object_names: List[str] = []
+        if extra is not None and extra.get("objects") is not None:
+            objects = extra["objects"]
+            if isinstance(objects, str):
+                object_names = self._object_names_from_text(objects)
+            else:
+                object_names = [str(obj).strip() for obj in objects if str(obj).strip()]
+        else:
+            query = extra.get("query") if extra else None
+            object_names = self._list_objects(
+                pil_image, query, reasoning=self._resolve_reasoning(extra)
+            )
         return self._detect_objects(pil_image, object_names)
     
     async def get_classifications_from_camera(
@@ -235,7 +247,24 @@ class moondream(Vision, Reconfigurable):
         if return_classifications:
             result.classifications = await self.get_classifications(result.image, 1, extra=extra)
         if return_detections:
-            result.detections = await self.get_detections(result.image, extra=extra)
+            det_extra = dict(extra) if extra else {}
+            # Reuse classification text as the object list so we don't query twice.
+            if (
+                return_classifications
+                and result.classifications
+                and "objects" not in det_extra
+                and "query" not in det_extra
+            ):
+                first = result.classifications[0]
+                if isinstance(first, dict):
+                    class_name = first.get("class_name")
+                else:
+                    class_name = getattr(first, "class_name", None)
+                if class_name:
+                    det_extra["objects"] = class_name
+            result.detections = await self.get_detections(
+                result.image, extra=det_extra or None
+            )
         return result
 
     async def get_properties(

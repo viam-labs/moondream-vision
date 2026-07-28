@@ -295,6 +295,20 @@ class TestDetections:
         assert service._test_model.query.call_args.kwargs.get("reasoning") is True
 
     @pytest.mark.asyncio
+    async def test_objects_extra_skips_listing_query(self, service):
+        service._test_model.detect.return_value = {
+            "objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]
+        }
+
+        result = await service.get_detections(
+            make_jpeg_image(), extra={"objects": "cup, bowl"}
+        )
+
+        assert [d["class_name"] for d in result] == ["cup", "bowl"]
+        service._test_model.query.assert_not_called()
+        assert service._test_model.detect.call_count == 2
+
+    @pytest.mark.asyncio
     async def test_empty_object_list(self, service):
         service._test_model.query.return_value = {"answer": ""}
         result = await service.get_detections(make_jpeg_image())
@@ -344,13 +358,11 @@ class TestPropertiesAndCaptureAll:
 
     @pytest.mark.asyncio
     async def test_capture_all_respects_flags(self, service):
-        service._test_model.query.side_effect = [
-            {"answer": "a scene"},
-            {"answer": "box"},
+        service._test_model.query.return_value = {"answer": "person, chair"}
+        service._test_model.detect.side_effect = [
+            {"objects": [{"x_min": 0, "y_min": 0, "x_max": 0.5, "y_max": 0.5}]},
+            {"objects": [{"x_min": 0.5, "y_min": 0.5, "x_max": 1, "y_max": 1}]},
         ]
-        service._test_model.detect.return_value = {
-            "objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]
-        }
 
         result = await service.capture_all_from_camera(
             "cam",
@@ -360,8 +372,26 @@ class TestPropertiesAndCaptureAll:
         )
 
         assert result.image is not None
-        assert result.classifications[0]["class_name"] == "a scene"
+        assert result.classifications[0]["class_name"] == "person, chair"
+        assert [d["class_name"] for d in result.detections] == ["person", "chair"]
+        # One classification query; detection reuses that text instead of querying again
+        assert service._test_model.query.call_count == 1
+        assert service._test_model.detect.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_capture_all_detections_only_still_lists_objects(self, service):
+        service._test_model.query.return_value = {"answer": "box"}
+        service._test_model.detect.return_value = {
+            "objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]
+        }
+
+        result = await service.capture_all_from_camera(
+            "cam",
+            return_detections=True,
+        )
+
         assert result.detections[0]["class_name"] == "box"
+        assert service._test_model.query.call_count == 1
 
     @pytest.mark.asyncio
     async def test_capture_all_skips_unrequested(self, service):
