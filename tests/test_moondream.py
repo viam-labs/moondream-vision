@@ -358,7 +358,10 @@ class TestPropertiesAndCaptureAll:
 
     @pytest.mark.asyncio
     async def test_capture_all_respects_flags(self, service):
-        service._test_model.query.return_value = {"answer": "person, chair"}
+        service._test_model.query.side_effect = [
+            {"answer": "a red helmet on a table"},
+            {"answer": "person, chair"},
+        ]
         service._test_model.detect.side_effect = [
             {"objects": [{"x_min": 0, "y_min": 0, "x_max": 0.5, "y_max": 0.5}]},
             {"objects": [{"x_min": 0.5, "y_min": 0.5, "x_max": 1, "y_max": 1}]},
@@ -372,12 +375,12 @@ class TestPropertiesAndCaptureAll:
         )
 
         assert result.image is not None
-        assert result.classifications[0]["class_name"] == "person, chair"
+        assert result.classifications[0]["class_name"] == "a red helmet on a table"
         assert [d["class_name"] for d in result.detections] == ["person", "chair"]
-        # Shared object-listing query (not classification_prompt) for both results
-        assert service._test_model.query.call_count == 1
-        prompt = service._test_model.query.call_args[0][1]
-        assert "List all the objects you can see" in prompt
+        # Separate prompts: classification_prompt then object-listing
+        assert service._test_model.query.call_count == 2
+        assert service._test_model.query.call_args_list[0][0][1] == "describe this image"
+        assert "List all the objects you can see" in service._test_model.query.call_args_list[1][0][1]
         assert service._test_model.detect.call_count == 2
 
     @pytest.mark.asyncio

@@ -263,41 +263,14 @@ class moondream(Vision, Reconfigurable):
     ) -> CaptureAllResult:
         result = CaptureAllResult()
         result.image = await self.get_cam_image(camera_name)
-
-        # Classifications alone use classification_prompt (often a description).
-        # Detections alone use the object-listing prompt, then detect.
-        # When both are requested, share one listing query so we stay fast and
-        # classifications are object names rather than descriptive sentences.
-        if return_classifications and return_detections:
-            pil_image = viam_to_pil_image(result.image)
-            extra = extra or {}
-            if extra.get("objects") is not None:
-                objects = extra["objects"]
-                if isinstance(objects, str):
-                    answer = objects
-                    object_names = self._object_names_from_text(objects)
-                else:
-                    object_names = [
-                        str(obj).strip() for obj in objects if str(obj).strip()
-                    ]
-                    answer = ", ".join(object_names)
-            else:
-                answer, object_names = self._query_object_list(
-                    pil_image,
-                    extra.get("query"),
-                    reasoning=self._resolve_reasoning(extra),
-                )
-            result.classifications = [{"class_name": answer, "confidence": 1}]
-            result.detections = self._detect_objects(pil_image, object_names)
-        else:
-            if return_classifications:
-                result.classifications = await self.get_classifications(
-                    result.image, 1, extra=extra
-                )
-            if return_detections:
-                result.detections = await self.get_detections(
-                    result.image, extra=extra
-                )
+        # Classifications use classification_prompt; detections use a separate
+        # object-listing query. These prompts differ, so do not reuse results.
+        if return_classifications:
+            result.classifications = await self.get_classifications(
+                result.image, 1, extra=extra
+            )
+        if return_detections:
+            result.detections = await self.get_detections(result.image, extra=extra)
         return result
 
     async def get_properties(
