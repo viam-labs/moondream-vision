@@ -56,7 +56,9 @@ class TestValidate:
             Moondream.validate(make_config({"api_key": "test-key"}))
 
     def test_returns_camera_dependency(self):
-        assert Moondream.validate(make_config({"api_key": "test-key", "camera": "cam"})) == (
+        assert Moondream.validate(
+            make_config({"api_key": "test-key", "camera": "cam"})
+        ) == (
             ["cam"],
             [],
         )
@@ -379,12 +381,19 @@ class TestPropertiesAndCaptureAll:
         assert [d["class_name"] for d in result.detections] == ["person", "chair"]
         # Separate prompts: classification_prompt then object-listing
         assert service._test_model.query.call_count == 2
-        assert service._test_model.query.call_args_list[0][0][1] == "describe this image"
-        assert "List all the objects you can see" in service._test_model.query.call_args_list[1][0][1]
+        assert (
+            service._test_model.query.call_args_list[0][0][1] == "describe this image"
+        )
+        assert (
+            "List all the objects you can see"
+            in service._test_model.query.call_args_list[1][0][1]
+        )
         assert service._test_model.detect.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_capture_all_classifications_only_uses_classification_prompt(self, service):
+    async def test_capture_all_classifications_only_uses_classification_prompt(
+        self, service
+    ):
         service._test_model.query.return_value = {"answer": "a red helmet on a table"}
 
         result = await service.capture_all_from_camera(

@@ -25,15 +25,14 @@ LOGGER = getLogger(__name__)
 
 DEFAULT_CLASSIFICATION_PROMPT = "describe this image"
 
+
 class moondream(Vision, Reconfigurable):
-    
     """
     Vision represents a Vision service.
     """
-    
 
     MODEL: ClassVar[Model] = Model(ModelFamily("viam-labs", "vision"), "moondream")
-    
+
     model: Any
     DEPS: Mapping[ResourceName, ResourceBase]
     classification_prompt: str
@@ -41,7 +40,9 @@ class moondream(Vision, Reconfigurable):
 
     # Constructor
     @classmethod
-    def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
+    def new(
+        cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
+    ) -> Self:
         my_class = cls(config.name)
         my_class.reconfigure(config, dependencies)
         return my_class
@@ -50,22 +51,32 @@ class moondream(Vision, Reconfigurable):
     @classmethod
     def validate(cls, config: ComponentConfig):
         fields = config.attributes.fields
-        api_key = fields["api_key"].string_value or os.environ.get("MOONDREAM_API_KEY", "")
+        api_key = fields["api_key"].string_value or os.environ.get(
+            "MOONDREAM_API_KEY", ""
+        )
         if not api_key:
-            raise Exception("api_key is required (set attributes.api_key or MOONDREAM_API_KEY)")
+            raise Exception(
+                "api_key is required (set attributes.api_key or MOONDREAM_API_KEY)"
+            )
         camera = fields["camera"].string_value
         if not camera:
             raise Exception("camera is required")
         return [camera], []
 
     # Handles attribute reconfiguration
-    def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
+    def reconfigure(
+        self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
+    ):
         self.DEPS = dependencies
         fields = config.attributes.fields
 
-        api_key = fields["api_key"].string_value or os.environ.get("MOONDREAM_API_KEY", "")
+        api_key = fields["api_key"].string_value or os.environ.get(
+            "MOONDREAM_API_KEY", ""
+        )
         if not api_key:
-            raise Exception("api_key is required (set attributes.api_key or MOONDREAM_API_KEY)")
+            raise Exception(
+                "api_key is required (set attributes.api_key or MOONDREAM_API_KEY)"
+            )
 
         # Ensure the configured camera dependency is present
         camera_name = fields["camera"].string_value
@@ -73,7 +84,8 @@ class moondream(Vision, Reconfigurable):
             raise Exception(f"camera dependency '{camera_name}' not found")
 
         self.classification_prompt = (
-            fields["classification_prompt"].string_value or DEFAULT_CLASSIFICATION_PROMPT
+            fields["classification_prompt"].string_value
+            or DEFAULT_CLASSIFICATION_PROMPT
         )
 
         # Default false; set reasoning=true for higher-quality answers (more latency)
@@ -95,7 +107,7 @@ class moondream(Vision, Reconfigurable):
         LOGGER.info(f"initializing Moondream in {mode} mode")
         self.model = md.vl(**kwargs)
         return
-    
+
     async def get_cam_image(self, camera_name: str) -> ViamImage:
         cam = cast(Camera, self.DEPS[Camera.get_resource_name(camera_name)])
         images, _ = await cam.get_images()
@@ -149,9 +161,7 @@ class moondream(Vision, Reconfigurable):
         reasoning: bool = False,
     ) -> List[str]:
         """Query Moondream for a comma-separated list of objects to detect."""
-        _, object_names = self._query_object_list(
-            pil_image, query, reasoning=reasoning
-        )
+        _, object_names = self._query_object_list(pil_image, query, reasoning=reasoning)
         return object_names
 
     def _detect_objects(self, pil_image, object_names: List[str]) -> List[Detection]:
@@ -165,24 +175,32 @@ class moondream(Vision, Reconfigurable):
                 y_min_n = float(obj["y_min"])
                 x_max_n = float(obj["x_max"])
                 y_max_n = float(obj["y_max"])
-                detections.append({
-                    "x_min": int(x_min_n * width),
-                    "y_min": int(y_min_n * height),
-                    "x_max": int(x_max_n * width),
-                    "y_max": int(y_max_n * height),
-                    "x_min_normalized": x_min_n,
-                    "y_min_normalized": y_min_n,
-                    "x_max_normalized": x_max_n,
-                    "y_max_normalized": y_max_n,
-                    "confidence": 1,
-                    "class_name": object_name,
-                })
+                detections.append(
+                    {
+                        "x_min": int(x_min_n * width),
+                        "y_min": int(y_min_n * height),
+                        "x_max": int(x_max_n * width),
+                        "y_max": int(y_max_n * height),
+                        "x_min_normalized": x_min_n,
+                        "y_min_normalized": y_min_n,
+                        "x_max_normalized": x_max_n,
+                        "y_max_normalized": y_max_n,
+                        "confidence": 1,
+                        "class_name": object_name,
+                    }
+                )
         return detections
-    
+
     async def get_detections_from_camera(
-        self, camera_name: str, *, extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None
+        self,
+        camera_name: str,
+        *,
+        extra: Optional[Mapping[str, Any]] = None,
+        timeout: Optional[float] = None,
     ) -> List[Detection]:
-        return await self.get_detections(await self.get_cam_image(camera_name), extra=extra)
+        return await self.get_detections(
+            await self.get_cam_image(camera_name), extra=extra
+        )
 
     async def get_detections(
         self,
@@ -209,7 +227,7 @@ class moondream(Vision, Reconfigurable):
                 pil_image, query, reasoning=self._resolve_reasoning(extra)
             )
         return self._detect_objects(pil_image, object_names)
-    
+
     async def get_classifications_from_camera(
         self,
         camera_name: str,
@@ -218,9 +236,10 @@ class moondream(Vision, Reconfigurable):
         extra: Optional[Mapping[str, Any]] = None,
         timeout: Optional[float] = None,
     ) -> List[Classification]:
-        return await self.get_classifications(await self.get_cam_image(camera_name), count, extra=extra)
+        return await self.get_classifications(
+            await self.get_cam_image(camera_name), count, extra=extra
+        )
 
-    
     async def get_classifications(
         self,
         image: ViamImage,
@@ -241,13 +260,18 @@ class moondream(Vision, Reconfigurable):
         classifications.append({"class_name": result, "confidence": 1})
         return classifications
 
-    
     async def get_object_point_clouds(
-        self, camera_name: str, *, extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None
+        self,
+        camera_name: str,
+        *,
+        extra: Optional[Mapping[str, Any]] = None,
+        timeout: Optional[float] = None,
     ) -> List[PointCloudObject]:
         return
-    
-    async def do_command(self, command: Mapping[str, ValueTypes], *, timeout: Optional[float] = None) -> Mapping[str, ValueTypes]:
+
+    async def do_command(
+        self, command: Mapping[str, ValueTypes], *, timeout: Optional[float] = None
+    ) -> Mapping[str, ValueTypes]:
         return
 
     async def capture_all_from_camera(
@@ -282,5 +306,5 @@ class moondream(Vision, Reconfigurable):
         return GetPropertiesResponse(
             classifications_supported=True,
             detections_supported=True,
-            object_point_clouds_supported=False
-            )
+            object_point_clouds_supported=False,
+        )
