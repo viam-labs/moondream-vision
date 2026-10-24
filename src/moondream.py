@@ -1,23 +1,19 @@
-from typing import ClassVar, Mapping, Optional, Any, List, cast
-from typing_extensions import Self
 import os
+from typing import Any, ClassVar, List, Mapping, Optional, cast
 
-from viam.proto.common import PointCloudObject
-from viam.proto.service.vision import Classification, Detection
-from viam.utils import ValueTypes
-
-from viam.module.types import Reconfigurable
-from viam.proto.app.robot import ComponentConfig
-from viam.proto.common import ResourceName
-from viam.resource.base import ResourceBase
-from viam.resource.types import Model, ModelFamily
-
-from viam.services.vision import Vision, CaptureAllResult
-from viam.proto.service.vision import GetPropertiesResponse
+from typing_extensions import Self
 from viam.components.camera import Camera, ViamImage
+from viam.logging import getLogger
 from viam.media.utils.pil import viam_to_pil_image
 from viam.media.video import CameraMimeType
-from viam.logging import getLogger
+from viam.module.types import Reconfigurable
+from viam.proto.app.robot import ComponentConfig
+from viam.proto.common import PointCloudObject, ResourceName
+from viam.proto.service.vision import Classification, Detection, GetPropertiesResponse
+from viam.resource.base import ResourceBase
+from viam.resource.types import Model, ModelFamily
+from viam.services.vision import CaptureAllResult, Vision
+from viam.utils import ValueTypes
 
 import moondream as md
 
