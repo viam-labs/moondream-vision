@@ -36,9 +36,7 @@ class moondream(Vision, Reconfigurable):
 
     # Constructor
     @classmethod
-    def new(
-        cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
-    ) -> Self:
+    def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
         my_class = cls(config.name)
         my_class.reconfigure(config, dependencies)
         return my_class
@@ -47,42 +45,29 @@ class moondream(Vision, Reconfigurable):
     @classmethod
     def validate(cls, config: ComponentConfig):
         fields = config.attributes.fields
-        api_key = fields["api_key"].string_value or os.environ.get(
-            "MOONDREAM_API_KEY", ""
-        )
+        api_key = fields["api_key"].string_value or os.environ.get("MOONDREAM_API_KEY", "")
         if not api_key:
-            raise Exception(
-                "api_key is required (set attributes.api_key or MOONDREAM_API_KEY)"
-            )
+            raise Exception("api_key is required (set attributes.api_key or MOONDREAM_API_KEY)")
         camera = fields["camera"].string_value
         if not camera:
             raise Exception("camera is required")
         return [camera], []
 
     # Handles attribute reconfiguration
-    def reconfigure(
-        self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
-    ):
+    def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
         self.DEPS = dependencies
         fields = config.attributes.fields
 
-        api_key = fields["api_key"].string_value or os.environ.get(
-            "MOONDREAM_API_KEY", ""
-        )
+        api_key = fields["api_key"].string_value or os.environ.get("MOONDREAM_API_KEY", "")
         if not api_key:
-            raise Exception(
-                "api_key is required (set attributes.api_key or MOONDREAM_API_KEY)"
-            )
+            raise Exception("api_key is required (set attributes.api_key or MOONDREAM_API_KEY)")
 
         # Ensure the configured camera dependency is present
         camera_name = fields["camera"].string_value
         if Camera.get_resource_name(camera_name) not in dependencies:
             raise Exception(f"camera dependency '{camera_name}' not found")
 
-        self.classification_prompt = (
-            fields["classification_prompt"].string_value
-            or DEFAULT_CLASSIFICATION_PROMPT
-        )
+        self.classification_prompt = fields["classification_prompt"].string_value or DEFAULT_CLASSIFICATION_PROMPT
 
         # Default false; set reasoning=true for higher-quality answers (more latency)
         self.reasoning = False
@@ -141,12 +126,7 @@ class moondream(Vision, Reconfigurable):
         reasoning: bool = False,
     ) -> tuple:
         """Return (raw_answer, object_names) from the detection listing prompt."""
-        answer = (
-            self.model.query(
-                pil_image, self._object_list_prompt(query), reasoning=reasoning
-            )["answer"]
-            or ""
-        )
+        answer = self.model.query(pil_image, self._object_list_prompt(query), reasoning=reasoning)["answer"] or ""
         return answer, self._object_names_from_text(answer)
 
     def _list_objects(
@@ -188,15 +168,9 @@ class moondream(Vision, Reconfigurable):
         return detections
 
     async def get_detections_from_camera(
-        self,
-        camera_name: str,
-        *,
-        extra: Optional[Mapping[str, Any]] = None,
-        timeout: Optional[float] = None,
+        self, camera_name: str, *, extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None
     ) -> List[Detection]:
-        return await self.get_detections(
-            await self.get_cam_image(camera_name), extra=extra
-        )
+        return await self.get_detections(await self.get_cam_image(camera_name), extra=extra)
 
     async def get_detections(
         self,
@@ -219,9 +193,7 @@ class moondream(Vision, Reconfigurable):
                 object_names = [str(obj).strip() for obj in objects if str(obj).strip()]
         else:
             query = extra.get("query") if extra else None
-            object_names = self._list_objects(
-                pil_image, query, reasoning=self._resolve_reasoning(extra)
-            )
+            object_names = self._list_objects(pil_image, query, reasoning=self._resolve_reasoning(extra))
         return self._detect_objects(pil_image, object_names)
 
     async def get_classifications_from_camera(
@@ -232,9 +204,7 @@ class moondream(Vision, Reconfigurable):
         extra: Optional[Mapping[str, Any]] = None,
         timeout: Optional[float] = None,
     ) -> List[Classification]:
-        return await self.get_classifications(
-            await self.get_cam_image(camera_name), count, extra=extra
-        )
+        return await self.get_classifications(await self.get_cam_image(camera_name), count, extra=extra)
 
     async def get_classifications(
         self,
@@ -257,11 +227,7 @@ class moondream(Vision, Reconfigurable):
         return classifications
 
     async def get_object_point_clouds(
-        self,
-        camera_name: str,
-        *,
-        extra: Optional[Mapping[str, Any]] = None,
-        timeout: Optional[float] = None,
+        self, camera_name: str, *, extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None
     ) -> List[PointCloudObject]:
         return
 
@@ -286,9 +252,7 @@ class moondream(Vision, Reconfigurable):
         # Classifications use classification_prompt; detections use a separate
         # object-listing query. These prompts differ, so do not reuse results.
         if return_classifications:
-            result.classifications = await self.get_classifications(
-                result.image, 1, extra=extra
-            )
+            result.classifications = await self.get_classifications(result.image, 1, extra=extra)
         if return_detections:
             result.detections = await self.get_detections(result.image, extra=extra)
         return result
@@ -300,7 +264,5 @@ class moondream(Vision, Reconfigurable):
         timeout: Optional[float] = None,
     ) -> GetPropertiesResponse:
         return GetPropertiesResponse(
-            classifications_supported=True,
-            detections_supported=True,
-            object_point_clouds_supported=False,
+            classifications_supported=True, detections_supported=True, object_point_clouds_supported=False
         )
