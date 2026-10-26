@@ -1,23 +1,19 @@
-from typing import ClassVar, Mapping, Optional, Any, List, cast
-from typing_extensions import Self
 import os
+from typing import Any, ClassVar, List, Mapping, Optional, cast
 
-from viam.proto.common import PointCloudObject
-from viam.proto.service.vision import Classification, Detection
-from viam.utils import ValueTypes
-
-from viam.module.types import Reconfigurable
-from viam.proto.app.robot import ComponentConfig
-from viam.proto.common import ResourceName
-from viam.resource.base import ResourceBase
-from viam.resource.types import Model, ModelFamily
-
-from viam.services.vision import Vision, CaptureAllResult
-from viam.proto.service.vision import GetPropertiesResponse
+from typing_extensions import Self
 from viam.components.camera import Camera, ViamImage
+from viam.logging import getLogger
 from viam.media.utils.pil import viam_to_pil_image
 from viam.media.video import CameraMimeType
-from viam.logging import getLogger
+from viam.module.types import Reconfigurable
+from viam.proto.app.robot import ComponentConfig
+from viam.proto.common import PointCloudObject, ResourceName
+from viam.proto.service.vision import Classification, Detection, GetPropertiesResponse
+from viam.resource.base import ResourceBase
+from viam.resource.types import Model, ModelFamily
+from viam.services.vision import CaptureAllResult, Vision
+from viam.utils import ValueTypes
 
 import moondream as md
 
@@ -25,15 +21,14 @@ LOGGER = getLogger(__name__)
 
 DEFAULT_CLASSIFICATION_PROMPT = "describe this image"
 
+
 class moondream(Vision, Reconfigurable):
-    
     """
     Vision represents a Vision service.
     """
-    
 
     MODEL: ClassVar[Model] = Model(ModelFamily("viam-labs", "vision"), "moondream")
-    
+
     model: Any
     DEPS: Mapping[ResourceName, ResourceBase]
     classification_prompt: str
@@ -72,9 +67,7 @@ class moondream(Vision, Reconfigurable):
         if Camera.get_resource_name(camera_name) not in dependencies:
             raise Exception(f"camera dependency '{camera_name}' not found")
 
-        self.classification_prompt = (
-            fields["classification_prompt"].string_value or DEFAULT_CLASSIFICATION_PROMPT
-        )
+        self.classification_prompt = fields["classification_prompt"].string_value or DEFAULT_CLASSIFICATION_PROMPT
 
         # Default false; set reasoning=true for higher-quality answers (more latency)
         self.reasoning = False
@@ -95,7 +88,7 @@ class moondream(Vision, Reconfigurable):
         LOGGER.info(f"initializing Moondream in {mode} mode")
         self.model = md.vl(**kwargs)
         return
-    
+
     async def get_cam_image(self, camera_name: str) -> ViamImage:
         cam = cast(Camera, self.DEPS[Camera.get_resource_name(camera_name)])
         images, _ = await cam.get_images()
@@ -133,12 +126,7 @@ class moondream(Vision, Reconfigurable):
         reasoning: bool = False,
     ) -> tuple:
         """Return (raw_answer, object_names) from the detection listing prompt."""
-        answer = (
-            self.model.query(
-                pil_image, self._object_list_prompt(query), reasoning=reasoning
-            )["answer"]
-            or ""
-        )
+        answer = self.model.query(pil_image, self._object_list_prompt(query), reasoning=reasoning)["answer"] or ""
         return answer, self._object_names_from_text(answer)
 
     def _list_objects(
@@ -149,9 +137,7 @@ class moondream(Vision, Reconfigurable):
         reasoning: bool = False,
     ) -> List[str]:
         """Query Moondream for a comma-separated list of objects to detect."""
-        _, object_names = self._query_object_list(
-            pil_image, query, reasoning=reasoning
-        )
+        _, object_names = self._query_object_list(pil_image, query, reasoning=reasoning)
         return object_names
 
     def _detect_objects(self, pil_image, object_names: List[str]) -> List[Detection]:
@@ -165,20 +151,22 @@ class moondream(Vision, Reconfigurable):
                 y_min_n = float(obj["y_min"])
                 x_max_n = float(obj["x_max"])
                 y_max_n = float(obj["y_max"])
-                detections.append({
-                    "x_min": int(x_min_n * width),
-                    "y_min": int(y_min_n * height),
-                    "x_max": int(x_max_n * width),
-                    "y_max": int(y_max_n * height),
-                    "x_min_normalized": x_min_n,
-                    "y_min_normalized": y_min_n,
-                    "x_max_normalized": x_max_n,
-                    "y_max_normalized": y_max_n,
-                    "confidence": 1,
-                    "class_name": object_name,
-                })
+                detections.append(
+                    {
+                        "x_min": int(x_min_n * width),
+                        "y_min": int(y_min_n * height),
+                        "x_max": int(x_max_n * width),
+                        "y_max": int(y_max_n * height),
+                        "x_min_normalized": x_min_n,
+                        "y_min_normalized": y_min_n,
+                        "x_max_normalized": x_max_n,
+                        "y_max_normalized": y_max_n,
+                        "confidence": 1,
+                        "class_name": object_name,
+                    }
+                )
         return detections
-    
+
     async def get_detections_from_camera(
         self, camera_name: str, *, extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None
     ) -> List[Detection]:
@@ -205,11 +193,9 @@ class moondream(Vision, Reconfigurable):
                 object_names = [str(obj).strip() for obj in objects if str(obj).strip()]
         else:
             query = extra.get("query") if extra else None
-            object_names = self._list_objects(
-                pil_image, query, reasoning=self._resolve_reasoning(extra)
-            )
+            object_names = self._list_objects(pil_image, query, reasoning=self._resolve_reasoning(extra))
         return self._detect_objects(pil_image, object_names)
-    
+
     async def get_classifications_from_camera(
         self,
         camera_name: str,
@@ -220,7 +206,6 @@ class moondream(Vision, Reconfigurable):
     ) -> List[Classification]:
         return await self.get_classifications(await self.get_cam_image(camera_name), count, extra=extra)
 
-    
     async def get_classifications(
         self,
         image: ViamImage,
@@ -241,13 +226,14 @@ class moondream(Vision, Reconfigurable):
         classifications.append({"class_name": result, "confidence": 1})
         return classifications
 
-    
     async def get_object_point_clouds(
         self, camera_name: str, *, extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None
     ) -> List[PointCloudObject]:
         return
-    
-    async def do_command(self, command: Mapping[str, ValueTypes], *, timeout: Optional[float] = None) -> Mapping[str, ValueTypes]:
+
+    async def do_command(
+        self, command: Mapping[str, ValueTypes], *, timeout: Optional[float] = None
+    ) -> Mapping[str, ValueTypes]:
         return
 
     async def capture_all_from_camera(
@@ -266,9 +252,7 @@ class moondream(Vision, Reconfigurable):
         # Classifications use classification_prompt; detections use a separate
         # object-listing query. These prompts differ, so do not reuse results.
         if return_classifications:
-            result.classifications = await self.get_classifications(
-                result.image, 1, extra=extra
-            )
+            result.classifications = await self.get_classifications(result.image, 1, extra=extra)
         if return_detections:
             result.detections = await self.get_detections(result.image, extra=extra)
         return result
@@ -280,7 +264,5 @@ class moondream(Vision, Reconfigurable):
         timeout: Optional[float] = None,
     ) -> GetPropertiesResponse:
         return GetPropertiesResponse(
-            classifications_supported=True,
-            detections_supported=True,
-            object_point_clouds_supported=False
-            )
+            classifications_supported=True, detections_supported=True, object_point_clouds_supported=False
+        )

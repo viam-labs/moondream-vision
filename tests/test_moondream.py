@@ -157,9 +157,7 @@ class TestClassifications:
             {Camera.get_resource_name("cam"): cam},
         )
 
-        result = await service.get_classifications(
-            make_jpeg_image(), 1, extra={"question": "is there a person?"}
-        )
+        result = await service.get_classifications(make_jpeg_image(), 1, extra={"question": "is there a person?"})
 
         assert result[0]["class_name"] == "yes"
         assert model.query.call_args[0][1] == "is there a person?"
@@ -200,18 +198,14 @@ class TestClassifications:
             {Camera.get_resource_name("cam"): cam},
         )
 
-        await service.get_classifications(
-            make_jpeg_image(), 1, extra={"reasoning": False}
-        )
+        await service.get_classifications(make_jpeg_image(), 1, extra={"reasoning": False})
 
         assert model.query.call_args.kwargs.get("reasoning") is False
 
     @pytest.mark.asyncio
     async def test_custom_question(self, service):
         service._test_model.query.return_value = {"answer": "yes"}
-        result = await service.get_classifications(
-            make_jpeg_image(), 1, extra={"question": "is there a person?"}
-        )
+        result = await service.get_classifications(make_jpeg_image(), 1, extra={"question": "is there a person?"})
         assert result[0]["class_name"] == "yes"
         assert service._test_model.query.call_args[0][1] == "is there a person?"
 
@@ -270,13 +264,9 @@ class TestDetections:
     @pytest.mark.asyncio
     async def test_query_limits_object_list(self, service):
         service._test_model.query.return_value = {"answer": "person"}
-        service._test_model.detect.return_value = {
-            "objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]
-        }
+        service._test_model.detect.return_value = {"objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]}
 
-        result = await service.get_detections(
-            make_jpeg_image(), extra={"query": "people"}
-        )
+        result = await service.get_detections(make_jpeg_image(), extra={"query": "people"})
 
         prompt = service._test_model.query.call_args[0][1]
         assert "List all people you can see" in prompt
@@ -286,9 +276,7 @@ class TestDetections:
     @pytest.mark.asyncio
     async def test_detection_query_respects_reasoning_extra(self, service):
         service._test_model.query.return_value = {"answer": "person"}
-        service._test_model.detect.return_value = {
-            "objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]
-        }
+        service._test_model.detect.return_value = {"objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]}
 
         await service.get_detections(make_jpeg_image(), extra={"reasoning": True})
 
@@ -296,13 +284,9 @@ class TestDetections:
 
     @pytest.mark.asyncio
     async def test_objects_extra_skips_listing_query(self, service):
-        service._test_model.detect.return_value = {
-            "objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]
-        }
+        service._test_model.detect.return_value = {"objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]}
 
-        result = await service.get_detections(
-            make_jpeg_image(), extra={"objects": "cup, bowl"}
-        )
+        result = await service.get_detections(make_jpeg_image(), extra={"objects": "cup, bowl"})
 
         assert [d["class_name"] for d in result] == ["cup", "bowl"]
         service._test_model.query.assert_not_called()
@@ -318,9 +302,7 @@ class TestDetections:
     @pytest.mark.asyncio
     async def test_from_camera(self, service):
         service._test_model.query.return_value = {"answer": "cup"}
-        service._test_model.detect.return_value = {
-            "objects": [{"x_min": 0, "y_min": 0, "x_max": 0.5, "y_max": 0.5}]
-        }
+        service._test_model.detect.return_value = {"objects": [{"x_min": 0, "y_min": 0, "x_max": 0.5, "y_max": 0.5}]}
         result = await service.get_detections_from_camera("cam")
         assert len(result) == 1
         service._test_camera.get_images.assert_awaited()
@@ -329,9 +311,7 @@ class TestDetections:
     async def test_from_camera_uses_requested_camera(self, mock_vl):
         _, model = mock_vl
         model.query.return_value = {"answer": "cup"}
-        model.detect.return_value = {
-            "objects": [{"x_min": 0, "y_min": 0, "x_max": 0.5, "y_max": 0.5}]
-        }
+        model.detect.return_value = {"objects": [{"x_min": 0, "y_min": 0, "x_max": 0.5, "y_max": 0.5}]}
         cam_a = make_camera()
         cam_b = make_camera()
         service = Moondream.new(
@@ -399,9 +379,7 @@ class TestPropertiesAndCaptureAll:
     @pytest.mark.asyncio
     async def test_capture_all_detections_only_still_lists_objects(self, service):
         service._test_model.query.return_value = {"answer": "box"}
-        service._test_model.detect.return_value = {
-            "objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]
-        }
+        service._test_model.detect.return_value = {"objects": [{"x_min": 0, "y_min": 0, "x_max": 1, "y_max": 1}]}
 
         result = await service.capture_all_from_camera(
             "cam",
